@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Share image</title>
+<!--
+  Source of public/og.png (the share-preview image, 1200x630). Edit the text, then regenerate from the project folder
+  (PowerShell; the file shows up a few seconds after the command returns):
+
+  & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 --virtual-time-budget=10000 --screenshot="$PWD\public\og.png" "file:///$($PWD -replace '\\','/')/scripts/og-card.html"
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@900&family=Inter:ital,wght@0,700;1,300&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #050607; }
+  body { position: relative; font-family: 'Inter', sans-serif; color: #fff; }
+  .glow { position: absolute; inset: 0; background: radial-gradient(46% 64% at 50% 52%, #151b21 0%, #0b0e11 40%, #050607 78%); }
+  canvas { position: absolute; inset: 0; }
+  .mark { position: absolute; left: 84px; top: 72px; width: 72px; height: 72px; }
+  .name { position: absolute; left: 84px; bottom: 156px; font: 900 180px/0.8 'Inter Tight', sans-serif; letter-spacing: -0.035em; word-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+    background: linear-gradient(180deg, #f7f8fb 0%, #d3d6dd 42%, #8f95a2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; padding-bottom: 8px; }
+  .role { position: absolute; left: 88px; bottom: 84px; font-size: 44px; line-height: 1; white-space: nowrap; }
+  .role b { font-weight: 700; }
+  .role i { font-weight: 300; color: #c6c9d1; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<canvas id="c" width="1200" height="630"></canvas>
+<img class="mark" src="../public/icon.svg" alt="" />
+<div class="name">Mazin Kazi</div>
+<div class="role"><b>React Native</b> <i>Developer</i></div>
+<script>
+  // star dust like the hero, from a fixed seed so the image is the same every time
+  let s = 3;
+  const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const g = document.getElementById('c').getContext('2d');
+  g.fillStyle = '#fff';
+  for (let i = 0; i < 330; i++) {
+    const z = r() < 0.12 ? 2.5 : r() < 0.4 ? 1.7 : 1.1;
+    g.globalAlpha = 0.25 + r() * 0.65;
+    g.fillRect(r() * 1200, r() * 630, z, z);
+  }
+</script>
+</body>
+</html>
