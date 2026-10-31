@@ -1,9 +1,11 @@
 import { clamp, kf, lin, ss, eOut3, eOut2, eIO3, safe, prefersReducedMotion } from '../lib/math.js';
 import { drawBust } from './placeholderBust.js';
 import { ParticleField } from './particles.js';
+import { Prologue, HANDOFF } from './prologue.js';
 
 /*
- * The hero intro, written as a pure function of time `t` (seconds).
+ * The hero intro, written as a pure function of time `t` (seconds). On a first visit the opening scene
+ * (prologue.js) plays before it, so `t` starts at -HANDOFF and the dot below begins to fall at t = 0.
  * Timings were read frame by frame from the reference video (15 fps).
  *
  *   0.07  dot falls in, squashes, bounces twice
@@ -43,6 +45,8 @@ export class HeroEngine {
 
     this.ctx = els.cv.getContext('2d');
     this.field = new ParticleField();
+    this.pro = els.pro ? new Prologue(els.pro) : null;
+    this.P = 0; // seconds of opening scene before t = 0 (0 when it is skipped)
     this.src = document.createElement('canvas');
     this.src.width = 800;
     this.src.height = 1000;
@@ -116,7 +120,11 @@ export class HeroEngine {
 
     const skip = this.reduce || this.seen;
     if (skip) this.formStart = -10;
-    else this.lockScroll(true);
+    else {
+      this.lockScroll(true);
+      // the scrollbar is gone now, so measure the opening scene again against the real width
+      if (this.pro) this.pro.layout(this.els.hero.clientWidth, this.els.hero.clientHeight, this.R);
+    }
 
     this.on(this.els.hero, 'pointermove', (e) => {
       const r = this.els.hero.getBoundingClientRect();
@@ -133,8 +141,11 @@ export class HeroEngine {
       this.introDone = false;
       this.curText = '';
     };
+    window.__seekP = (tp) => window.__seek(tp - this.P); // jump inside the opening scene (testing)
+    window.__pro = this.pro; // the opening scene, for poking at in the console (testing)
 
     this.onScroll();
+    this.P = skip ? 0 : HANDOFF;
     this.t0 = performance.now() - (skip ? 6200 : 0);
     this.raf = requestAnimationFrame(this.tick);
   }
@@ -157,6 +168,7 @@ export class HeroEngine {
   }
 
   skip() {
+    this.P = 0;
     this.t0 = performance.now() - 6200;
     this.introDone = false;
     this.markSeen();
@@ -257,6 +269,7 @@ export class HeroEngine {
     pill.style.height = '100%';
     down.style.height = '100%';
     this.curText = '';
+    if (this.pro) this.pro.layout(this.VW, this.VH, R);
   }
 
   /* ---------- the intro, one frame ---------- */
@@ -393,6 +406,7 @@ export class HeroEngine {
 
   render(t) {
     if (!this.ready) return;
+    if (this.pro) this.pro.render(this.P > 0 ? t + this.P : Infinity);
     if (t < 4.0 || !this.introDone) {
       this.introFrame(Math.min(t, 9));
       if (t >= 4.0) this.introDone = true;
@@ -401,8 +415,9 @@ export class HeroEngine {
     if (nav) nav.style.opacity = clamp((t - 4.62) / 0.12);
     const { photoBtn, skipBtn } = this.els;
     photoBtn.style.opacity = clamp((t - 5.8) / 0.5) * 0.7;
-    skipBtn.style.opacity = clamp(1 - (t - 4.4) / 0.5);
-    skipBtn.style.visibility = t > 4.95 ? 'hidden' : 'visible';
+    const hold = this.P > 0 ? clamp((t + this.P - 1.3) / 0.4) : 1; // no skip button on the fake 404: a real one has none
+    skipBtn.style.opacity = clamp(1 - (t - 4.4) / 0.5) * hold;
+    skipBtn.style.visibility = t > 4.95 || hold < 0.02 ? 'hidden' : 'visible';
     if (t > 5.9 && this.locked) this.lockScroll(false);
     if (t > 5.9 && this.frozen == null && !this.marked) {
       this.marked = true;
@@ -423,7 +438,7 @@ export class HeroEngine {
 
   tick = (now) => {
     if (this.destroyed) return;
-    this.tNow = this.frozen != null ? this.frozen : (now - this.t0) / 1000;
+    this.tNow = this.frozen != null ? this.frozen : (now - this.t0) / 1000 - this.P;
     this.render(this.tNow);
     this.raf = requestAnimationFrame(this.tick);
   };

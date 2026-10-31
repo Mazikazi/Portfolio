@@ -83,6 +83,23 @@ a{color:inherit}
 #photoBtn{right:var(--gr);opacity:0;transition:opacity .4s}
 #skip:hover,#photoBtn:hover{color:#fff}
 
+/* opening scene: a white 404 page the hero engine plays before the dot intro (src/hero/prologue.js).
+   The "pro" class on <html> is set by a script in index.html (first visit only) so the page never flashes dark first. */
+#pro{position:absolute;inset:0;z-index:4;display:none;overflow:hidden;background:#fff}
+html.pro,html.pro body{background:#fff}
+html.pro #pro{display:block}
+html.pro #skip:hover{color:#14161a}
+html.pro :focus-visible{outline-color:#14161a}
+#proSvg,#proDust{position:absolute;inset:0;width:100%;height:100%}
+#proDust{pointer-events:none}
+#proText{visibility:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif} /* the plain system font of any stock 404 page */
+#proBub{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;transform-origin:100% 78%;color:#14161a;background:#fff;border:.12em solid #14161a;border-radius:.9em;padding:.4em .75em .45em;font:700 24px/1.1 var(--text)}
+#proBub i,#proBub b{font-style:normal}
+#proBub b{visibility:hidden}
+#proBub::before,#proBub::after{content:"";position:absolute;width:0;height:0;border-style:solid}
+#proBub::before{right:-.72em;bottom:.2em;border-width:.38em 0 .38em .74em;border-color:transparent transparent transparent #14161a}
+#proBub::after{right:-.52em;bottom:.27em;border-width:.3em 0 .3em .6em;border-color:transparent transparent transparent #fff}
+
 /* sections */
 .sec{position:relative;padding:clamp(64px,10vh,120px) var(--gr) clamp(40px,7vh,96px) var(--gl)}
 .wrap{max-width:1500px;margin:0 auto}

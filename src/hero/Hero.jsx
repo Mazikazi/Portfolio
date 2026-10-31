@@ -85,6 +85,39 @@ export default function Hero({ config, getNav }) {
           Contact
         </a>
       </div>
+      <div id="pro" aria-hidden="true" ref={set('pro')}>
+        <svg id="proSvg">
+          <defs>
+            <mask id="proMask" maskUnits="userSpaceOnUse" x="0" y="0">
+              <rect id="proMaskBg" fill="#fff" />
+              <path id="proTrail" fill="none" stroke="#000" strokeLinecap="square" strokeLinejoin="round" />
+            </mask>
+          </defs>
+          <g id="proText" mask="url(#proMask)" textAnchor="middle">
+            <text id="proN" fill="#212529" fontWeight="700">
+              404
+            </text>
+            <text id="proH" fill="#212529" fontWeight="600">
+              Page not found
+            </text>
+            <text id="proP" fill="#6c757d">
+              {"The page you're looking for doesn't exist."}
+            </text>
+            <text id="proL" fill="#0d6efd" textDecoration="underline">
+              Go back home
+            </text>
+          </g>
+          <g id="proEyes" fill="#14161a">
+            <rect id="eyeL" />
+            <rect id="eyeR" />
+          </g>
+        </svg>
+        <canvas id="proDust" />
+        <div id="proBub">
+          <i />
+          <b />
+        </div>
+      </div>
       <canvas id="cv" aria-hidden="true" ref={set('cv')} />
       <button id="skip" type="button" ref={set('skipBtn')} onClick={() => engineRef.current && engineRef.current.skip()}>
         Skip intro

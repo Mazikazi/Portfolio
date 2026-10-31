@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // First visit in this tab: start on the white page of the opening scene (a fake 404), so nothing flashes dark first.
+      // Crawlers and link previews get the real page instead: a bot must never think the homepage is an error page.
+      try {
+        if (/bot|crawl|spider|slurp|lighthouse|facebookexternalhit|whatsapp/i.test(navigator.userAgent)) sessionStorage.setItem('mk-intro', '1');
+        if (!sessionStorage.getItem('mk-intro') && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.className = 'pro';
+      } catch (e) {}
+    </script>
     <title>Mazin Kazi | React Native Developer</title>
     <meta name="description" content="Mazin Kazi is a React Native developer building offline-first mobile apps with Expo, including point of sale and inventory software." />
     <meta name="theme-color" content="#050607" />
