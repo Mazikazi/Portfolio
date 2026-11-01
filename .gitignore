@@ -3,3 +3,6 @@ dist
 *.local
 .impeccable
 .claude
+.env
+.env.*
+!.env.example
