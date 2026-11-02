@@ -118,7 +118,8 @@ export class HeroEngine {
     if (saved) this.loadSrc(saved, false, true);
     else if (this.cfg.photo) this.loadSrc(this.cfg.photo, false, false);
 
-    const skip = this.reduce || this.seen;
+    // index.html sets "pro" (also for /?intro) when the scene should play, and that wins over reduce motion and the seen flag
+    const skip = !document.documentElement.classList.contains('pro') && (this.reduce || this.seen);
     if (skip) this.formStart = -10;
     else {
       this.lockScroll(true);

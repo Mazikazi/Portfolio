@@ -77,3 +77,4 @@ On a first visit the page starts as the most ordinary 404 there is: white, a hug
 - Plays once per browser tab. A reload in the same tab goes straight to the portrait.
 - "Skip intro" (bottom left) jumps to the end, from any point of the opening scene too.
 - With "reduce motion" turned on in the operating system, the whole intro is skipped.
+- Opening `/?intro` plays it again every time, even after a first visit and with reduce motion on. Nothing on the site links to it. Crawlers still get the real page.

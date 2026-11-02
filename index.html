@@ -7,8 +7,11 @@
       // First visit in this tab: start on the white page of the opening scene (a fake 404), so nothing flashes dark first.
       // Crawlers and link previews get the real page instead: a bot must never think the homepage is an error page.
       try {
-        if (/bot|crawl|spider|slurp|lighthouse|facebookexternalhit|whatsapp/i.test(navigator.userAgent)) sessionStorage.setItem('mk-intro', '1');
-        if (!sessionStorage.getItem('mk-intro') && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.className = 'pro';
+        const bot = /bot|crawl|spider|slurp|lighthouse|facebookexternalhit|whatsapp/i.test(navigator.userAgent);
+        if (bot) sessionStorage.setItem('mk-intro', '1');
+        // /?intro plays the scene again, even after a first visit or with reduce motion on (a bot still gets the real page)
+        const again = !bot && new URLSearchParams(location.search).has('intro');
+        if (again || (!sessionStorage.getItem('mk-intro') && !matchMedia('(prefers-reduced-motion: reduce)').matches)) document.documentElement.className = 'pro';
       } catch (e) {}
     </script>
     <title>Mazin Kazi | React Native Developer</title>
