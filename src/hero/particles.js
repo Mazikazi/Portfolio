@@ -20,10 +20,13 @@ export class ParticleField {
     this.buckets = Array.from({ length: LV * 4 }, () => []);
   }
 
-  /** Turn the 800x1000 source picture into particles (one per bright mosaic cell). */
-  buildPortrait(src, VW, VH) {
+  /**
+   * Turn the 800x1000 source picture into particles (one per bright mosaic cell). By default the portrait stands at
+   * the bottom of a VW x VH canvas (the hero). With `frame` ({ x, y, w, h }) it fills that box of the canvas instead.
+   */
+  buildPortrait(src, VW, VH, frame) {
     if (!VW) return;
-    const Hp = Math.min(0.9 * VH, 1.55 * VW);
+    const Hp = frame ? frame.h : Math.min(0.9 * VH, 1.55 * VW);
     const Wp = Hp * 0.8;
     let s = Math.max(3, Math.round(Hp / 150));
     let cols;
@@ -82,8 +85,13 @@ export class ParticleField {
     }
 
     const r = rng(7);
-    const x0 = VW / 2 - Wp / 2;
-    const y0 = VH - Hp;
+    const x0 = frame ? frame.x + (frame.w - Wp) / 2 : VW / 2 - Wp / 2;
+    const y0 = frame ? frame.y + frame.h - Hp : VH - Hp;
+    // the loose cloud the particles gather from, and how far they spread (the whole canvas for the hero)
+    const W = frame ? 1.6 * frame.w : VW;
+    const H = frame ? frame.h : VH;
+    const cx0 = frame ? frame.x + frame.w / 2 : VW / 2;
+    const cy0 = frame ? frame.y + 0.3 * frame.h : 0.38 * VH;
     const tmp = [];
     for (let cy = 0; cy < rows; cy++) {
       for (let cx = 0; cx < cols; cx++) {
@@ -118,14 +126,14 @@ export class ParticleField {
       this.hx[i] = p[0];
       this.hy[i] = p[1];
       this.lb[i] = Math.min(LV - 1, Math.floor(p[2] * LV));
-      this.sx0[i] = VW / 2 + gauss() * 0.05 * VW;
-      this.sy0[i] = 0.38 * VH + gauss() * 0.075 * VH;
+      this.sx0[i] = cx0 + gauss() * 0.05 * W;
+      this.sy0[i] = cy0 + gauss() * 0.075 * H;
       this.dl[i] = 0.55 * p[3] + r() * 0.1;
       this.du[i] = 0.45 + r() * 0.3;
-      this.cu[i] = (r() - 0.5) * 0.1 * VW;
+      this.cu[i] = (r() - 0.5) * 0.1 * W;
       this.ph[i] = r() * 6.28;
-      this.dxv[i] = gauss() * 0.2 * VW;
-      this.dyv[i] = (r() - 0.35) * 0.55 * VH;
+      this.dxv[i] = gauss() * 0.2 * W;
+      this.dyv[i] = (r() - 0.35) * 0.55 * H;
     }
   }
 

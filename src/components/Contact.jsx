@@ -35,6 +35,8 @@ export default function Contact({ email, links = [] }) {
 
   return (
     <section className="sec" id="contact" aria-label="Contact">
+      {/* the second particle portrait is drawn here by the hero engine, in the #mosaic box */}
+      <canvas id="endCv" aria-hidden="true" />
       <div className="wrap">
         <div className="head">
           <Reveal className="label">Contact</Reveal>
@@ -55,6 +57,7 @@ export default function Contact({ email, links = [] }) {
             </a>
           ))}
         </Reveal>
+        <div id="mosaic" aria-hidden="true" />
       </div>
     </section>
   );

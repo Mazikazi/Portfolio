@@ -22,6 +22,8 @@ export default function App() {
         <Skills items={CONFIG.skills} />
         <Contact email={CONFIG.email} links={CONFIG.links} />
       </main>
+      {/* the particle cloud that builds the sections (src/fx/cloud.js), drawn by the hero engine */}
+      <canvas id="fx" aria-hidden="true" />
       <footer>
         <span>
           © {new Date().getFullYear()} {CONFIG.name}

@@ -1,7 +1,8 @@
-import { clamp, kf, lin, ss, eOut3, eOut2, eIO3, safe, prefersReducedMotion } from '../lib/math.js';
+import { clamp, kf, lin, ss, eOut3, eOut2, eIO3, safe, prefersReducedMotion, calmMotion } from '../lib/math.js';
 import { drawBust } from './placeholderBust.js';
 import { ParticleField } from './particles.js';
 import { Prologue, HANDOFF } from './prologue.js';
+import { CLOUD, Cloud, release } from '../fx/cloud.js';
 
 /*
  * The hero intro, written as a pure function of time `t` (seconds). On a first visit the opening scene
@@ -26,6 +27,16 @@ const A0L = [-100, 150, -90, 120];
 const A0R = [-65, 55, -40, 45];
 const PULSE = [[0.267, 0.45, 0.09], [0.667, 0.45, 0.09], [0.933, 1, 0.12]];
 const FONT = "900 200px 'Inter Tight','Inter',sans-serif";
+
+/** Draw a photo into an 800x1000 canvas: it covers it, on black, with a little more room below the head. */
+function fitPhoto(g, img) {
+  const r = Math.max(800 / img.width, 1000 / img.height);
+  const w = img.width * r;
+  const h = img.height * r;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 800, 1000);
+  g.drawImage(img, (800 - w) / 2, (1000 - h) * 0.25, w, h);
+}
 
 export class HeroEngine {
   /**
@@ -89,6 +100,18 @@ export class HeroEngine {
     this.cleanups = [];
     this.reduce = prefersReducedMotion();
     this.seen = safe(() => sessionStorage.getItem('mk-intro'));
+
+    // the second portrait, at the end of the page (#endCv and #mosaic in Contact), set up in initEnd()
+    this.end = new ParticleField();
+    this.endCv = null;
+    this.endSrc = null; // its 800x1000 picture, once loaded
+    this.endBuilt = false;
+    this.endOn = false; // the Contact section is on screen
+    this.endSeen = false; // the box has been reached once
+    this.endStart = null; // time its particles started to gather
+    this.endDis = 0;
+    this.ex = -999;
+    this.ey = -999;
   }
 
   on(target, type, fn, opts) {
@@ -117,6 +140,17 @@ export class HeroEngine {
     const saved = safe(() => localStorage.getItem('mk-photo'));
     if (saved) this.loadSrc(saved, false, true);
     else if (this.cfg.photo) this.loadSrc(this.cfg.photo, false, false);
+    this.initEnd();
+    const fx = document.getElementById('fx');
+    if (CLOUD && fx) {
+      try {
+        this.cloud = new Cloud(fx);
+        window.__cloud = this.cloud; // for poking at in the console (testing)
+      } catch (err) {
+        console.warn('particle cloud off:', err);
+        release(); // the sections just appear
+      }
+    } else if (CLOUD) release();
 
     // index.html sets "pro" (also for /?intro) when the scene should play, and that wins over reduce motion and the seen flag
     const skip = !document.documentElement.classList.contains('pro') && (this.reduce || this.seen);
@@ -155,6 +189,8 @@ export class HeroEngine {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
     clearTimeout(this.resizeTimer);
+    if (this.cloud) this.cloud.destroy();
+    this.cloud = null;
     this.cleanups.forEach((fn) => fn());
     this.cleanups = [];
     this.lockScroll(false);
@@ -177,6 +213,55 @@ export class HeroEngine {
 
   markSeen() {
     safe(() => sessionStorage.setItem('mk-intro', '1'));
+  }
+
+  /* ---------- the second portrait, at the end of the page ---------- */
+
+  /**
+   * The same particles as the hero portrait, standing in the empty #mosaic box of Contact. They gather the first
+   * time the box is reached, push away from the cursor, and scatter when the page is scrolled back up from it,
+   * the mirror of the hero, which scatters when the page is scrolled down.
+   */
+  initEnd() {
+    const cv = document.getElementById('endCv');
+    this.box = document.getElementById('mosaic');
+    if (!cv || !this.box || !this.cfg.photoEnd) return;
+    this.endCv = cv;
+    this.endCtx = cv.getContext('2d');
+    this.endCalm = calmMotion();
+    const im = new Image();
+    im.onload = () => {
+      const src = document.createElement('canvas');
+      src.width = 800;
+      src.height = 1000;
+      fitPhoto(src.getContext('2d'), im);
+      this.endSrc = src;
+      this.endBuilt = false;
+    };
+    im.src = this.cfg.photoEnd;
+    const ro = new ResizeObserver(() => (this.endBuilt = false));
+    ro.observe(cv);
+    this.cleanups.push(() => ro.disconnect());
+    this.on(cv.parentNode, 'pointermove', (e) => {
+      const r = cv.getBoundingClientRect();
+      this.ex = e.clientX - r.left;
+      this.ey = e.clientY - r.top;
+    });
+    this.on(cv.parentNode, 'pointerleave', () => {
+      this.ex = this.ey = -999;
+    });
+  }
+
+  buildEnd() {
+    const cv = this.endCv;
+    const c = cv.getBoundingClientRect();
+    const b = this.box.getBoundingClientRect();
+    this.endW = c.width;
+    this.endH = c.height;
+    cv.width = Math.round(c.width * this.dpr);
+    cv.height = Math.round(c.height * this.dpr);
+    this.end.buildPortrait(this.endSrc, c.width, c.height, { x: b.left - c.left, y: b.top - c.top, w: b.width, h: b.height });
+    this.endBuilt = true;
   }
 
   /* ---------- title and layout ---------- */
@@ -435,6 +520,20 @@ export class HeroEngine {
         formStart: this.formStart,
       });
     }
+    if (this.endOn && this.endSrc) {
+      if (!this.endBuilt) this.buildEnd();
+      if (this.endSeen && this.endStart == null) this.endStart = this.endCalm ? -10 : t;
+      this.end.draw(this.endCtx, t, {
+        VW: this.endW,
+        VH: this.endH,
+        dpr: this.dpr,
+        dissolve: this.endDis,
+        mx: this.ex,
+        my: this.ey,
+        formStart: this.endStart == null ? Infinity : this.endStart,
+      });
+    }
+    if (this.cloud) this.cloud.render(t, this.field, this.VH);
   }
 
   tick = (now) => {
@@ -448,6 +547,14 @@ export class HeroEngine {
     const y = window.scrollY || 0;
     this.dissolve = clamp(y / (0.25 * (this.VH || 1)));
     this.heroVisible = y < (this.VH || 0) * 1.05;
+    if (this.endCv) {
+      const vh = window.innerHeight;
+      const c = this.endCv.getBoundingClientRect();
+      const below = this.box.getBoundingClientRect().bottom - vh; // px of the box still under the screen
+      this.endOn = c.bottom > 0 && c.top < vh;
+      this.endDis = this.endCalm ? 0 : clamp(below / (0.25 * vh));
+      if (below < 0.1 * vh) this.endSeen = true;
+    }
   };
 
   onResize = () => {
@@ -472,12 +579,7 @@ export class HeroEngine {
   setPhoto(img, persist, vignette) {
     if (this.destroyed) return;
     const g = this.sctx;
-    const r = Math.max(800 / img.width, 1000 / img.height);
-    const w = img.width * r;
-    const h = img.height * r;
-    g.fillStyle = '#000';
-    g.fillRect(0, 0, 800, 1000);
-    g.drawImage(img, (800 - w) / 2, (1000 - h) * 0.25, w, h);
+    fitPhoto(g, img);
     if (vignette) {
       // Uploaded photos have a background, so fade the edges to black.
       const vg = g.createRadialGradient(400, 430, 170, 400, 520, 640);

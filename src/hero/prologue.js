@@ -7,10 +7,10 @@ import { clamp, lerp, ss, kf, bezier, rng } from '../lib/math.js';
  *         The browser tab says "404 Not Found" too, so a visitor believes the site is broken
  *   1.5   two rectangle eyes slide in from the right
  *   2.5   they say "oh...", then "let me fix it."
- *   4.55  they erase the page in one continuous movement, trailing dust: along the top of the digits,
- *         back along the bottom, then along the text, and straight on to the middle of the screen
- *   9.25  they merge into a circle there
- *   9.85  the circle squashes, shoots off the top of the screen and the page goes dark
+ *   4.55  they erase the page in one continuous movement, trailing dust: twice round an infinity loop with a
+ *         round eraser a little bigger than them, at a hand-drawn pace, then on to the middle of the screen
+ *   10.05 they merge into a circle there
+ *   10.65 the circle squashes, shoots off the top of the screen and the page goes dark
  *   HANDOFF  the dot of the original intro falls in (that is the engine's time 0)
  *
  * Like the engine it is a pure function of time: render(tp) writes the styles for second tp, so seeking and
@@ -38,7 +38,7 @@ const BLINKS = [2.2, 4.0, 6.6];
 const SY = [[0, 1], [2.5, 1], [2.65, 1.14], [3.05, 1], [3.45, 1], [3.65, 0.78], [4.4, 0.78], [4.55, 1]]; // wide-eyed at "oh...", narrowed at "let me fix it."
 const LOOK = [[0, 0], [2.5, 0], [2.7, -0.07], [4.35, -0.07], [4.55, 0]]; // glance left at the page while talking
 const SWEEP_AT = 4.55;
-const SWEEP_DUR = 4.8; // one movement: the erasing and the trip to the middle
+const SWEEP_DUR = 5.6; // one movement: the erasing and the trip to the middle
 const SWEEP_END = SWEEP_AT + SWEEP_DUR;
 const MERGE_AT = SWEEP_END - 0.3; // the eyes start to merge while they are still gliding in, 0.45 s
 const SQUASH_AT = MERGE_AT + 0.45; // crouch before the jump, 0.15 s
@@ -69,39 +69,91 @@ export const progInv = (p) => {
   return 1 - Math.sqrt((2 * EASE_OUT * (1 - p)) / VMAX);
 };
 
-/** Walk through the points, cutting each inner corner with a circular arc of radius rs[i]. Returns samples about `step` apart. */
-export function trace(pts, rs, step) {
-  const out = [pts[0]];
-  const line = (to) => {
-    const from = out[out.length - 1];
-    const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
-    if (dist < 1e-9) return; // already there: two arcs that meet
-    const n = Math.max(1, Math.ceil(dist / step));
-    for (let k = 1; k <= n; k++) out.push(k === n ? to : [lerp(from[0], to[0], k / n), lerp(from[1], to[1], k / n)]); // the last sample is exactly `to`
+/** Radius of the round eraser, in H: a little more than half the diagonal of the two eyes (0.39), so it reads as a circle around them. */
+export const RHO = 0.45;
+
+/**
+ * The eraser path, in H units from the middle of the digits, as samples `step` apart. From where the eyes stand it
+ * joins an infinity loop and goes round it twice: first a big loop whose eraser reaches past the corners of the page
+ * (`box`: its left and right edge, top and bottom), then a smaller one through the holes the big one leaves in the
+ * middle of each lobe. It leaves the loop going up at the left end, and curves on to `mid`.
+ */
+export function sweepPath({ L, R, top, bottom }, mid, step = 0.03) {
+  const xc = (L + R) / 2;
+  const yc = (top + bottom) / 2;
+  const hw = (R - L) / 2;
+  const hh = (bottom - top) / 2;
+  // [A, B, C]: x = A sin θ, y = B sin 2θ + C cos²θ (y points down). C moves the crossing down (the big loop, so the
+  // eraser reaches the bottom middle) or up (the small one, for the top middle). θ = 3π/4 is the top of the right lobe,
+  // heading left. 5.5π is the left end, heading up.
+  const big = [hw - 0.2 * RHO, hh - 0.4 * RHO, hh - 0.85 * RHO];
+  const small = [0.8 * hw, 0.4 * hh, -0.8 * (hh - 0.85 * RHO)];
+  const T0 = 0.75 * Math.PI;
+  const T1 = 5.5 * Math.PI;
+  const loop = (th) => {
+    const k = ss(clamp((th - 2.5 * Math.PI) / (0.9 * Math.PI))); // from the big loop to the small one, after the first round
+    const [A, B, C] = big.map((v, i) => lerp(v, small[i], k));
+    return [xc + A * Math.sin(th), yc + B * Math.sin(2 * th) + C * Math.cos(th) ** 2];
   };
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [a, b, c] = [pts[i - 1], pts[i], pts[i + 1]];
-    const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const l2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
-    const d1 = [(b[0] - a[0]) / l1, (b[1] - a[1]) / l1];
-    const d2 = [(c[0] - b[0]) / l2, (c[1] - b[1]) / l2];
-    const turn = Math.acos(clamp(d1[0] * d2[0] + d1[1] * d2[1], -1, 1));
-    if (turn < 1e-3) continue;
-    const t = Math.tan(turn / 2);
-    const r = Math.min(rs[i], (0.5 * Math.min(l1, l2)) / t); // the arc may not use up more than half of a neighbouring segment
-    const sign = Math.sign(d1[0] * d2[1] - d1[1] * d2[0]);
-    const p1 = [b[0] - d1[0] * r * t, b[1] - d1[1] * r * t];
-    const ctr = [p1[0] - sign * d1[1] * r, p1[1] + sign * d1[0] * r];
-    const a0 = Math.atan2(p1[1] - ctr[1], p1[0] - ctr[0]);
-    line(p1);
-    const n = Math.max(2, Math.ceil((r * turn) / step));
-    for (let k = 1; k <= n; k++) {
-      const ang = a0 + (sign * turn * k) / n;
-      out.push([ctr[0] + r * Math.cos(ang), ctr[1] + r * Math.sin(ang)]);
-    }
+  const bez = (p0, p1, p2, p3) => (u) => {
+    const v = 1 - u;
+    const w = [v * v * v, 3 * v * v * u, 3 * v * u * u, u * u * u];
+    return [0, 1].map((c) => w[0] * p0[c] + w[1] * p1[c] + w[2] * p2[c] + w[3] * p3[c]);
+  };
+  const a = loop(T0);
+  const b = loop(T1);
+  const dir = (th, s) => {
+    const p = loop(th);
+    const n = loop(th + 1e-4);
+    const d = Math.hypot(n[0] - p[0], n[1] - p[1]);
+    return [(s * (n[0] - p[0])) / d, (s * (n[1] - p[1])) / d];
+  };
+  const [ia, ib] = [dir(T0, 0.45), dir(T1, 0.5)];
+  const enter = bez(REST, [REST[0] - 0.1, REST[1] + 0.25], [a[0] - ia[0], a[1] - ia[1]], a); // joins the loop along its own direction
+  const leave = bez(b, [b[0] + ib[0], b[1] + ib[1]], [mid[0] - 0.4, mid[1] + 0.1], mid); // and leaves it the same way
+  const dense = [];
+  for (let i = 0; i < 300; i++) dense.push(enter(i / 300));
+  for (let i = 0; i < 3000; i++) dense.push(loop(lerp(T0, T1, i / 3000)));
+  for (let i = 0; i <= 300; i++) dense.push(leave(i / 300));
+
+  // equal steps along the curve
+  const out = [dense[0]];
+  let carry = 0; // distance since the last sample
+  for (let i = 1; i < dense.length; i++) {
+    const p = dense[i - 1];
+    const q = dense[i];
+    const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    let at = step - carry;
+    for (; at <= d; at += step) out.push([lerp(p[0], q[0], at / d), lerp(p[1], q[1], at / d)]);
+    carry = d - (at - step);
   }
-  line(pts[pts.length - 1]);
+  const end = dense[dense.length - 1];
+  if (Math.hypot(end[0] - out[out.length - 1][0], end[1] - out[out.length - 1][1]) > 1e-6) out.push(end);
   return out;
+}
+
+/**
+ * A natural pace along the path: like a hand drawing a curve, slower in the tight turns and faster on the open
+ * stretches (speed goes with curvature to the power -1/3). Returns, for each sample, the fraction of the sweep's time
+ * at which the eyes pass it (before the soft start and stop of prog() are applied).
+ */
+export function pace(way) {
+  const n = way.length;
+  const curv = new Float32Array(n);
+  for (let i = 1; i < n - 1; i++) {
+    const [a, b, c] = [way[i - 1], way[i], way[i + 1]];
+    const t = Math.atan2(c[1] - b[1], c[0] - b[0]) - Math.atan2(b[1] - a[1], b[0] - a[0]);
+    curv[i] = Math.abs(Math.atan2(Math.sin(t), Math.cos(t))) / Math.hypot(b[0] - a[0], b[1] - a[1]); // turning per H
+  }
+  const q = [0];
+  for (let i = 1; i < n; i++) {
+    let k = 0; // curvature, averaged over a short stretch so the speed changes smoothly
+    let m = 0;
+    for (let j = Math.max(0, i - 8); j <= Math.min(n - 1, i + 8); j++, m++) k += curv[j];
+    const v = Math.pow(k / m + 0.6, -1 / 3);
+    q.push(q[i - 1] + Math.hypot(way[i][0] - way[i - 1][0], way[i][1] - way[i - 1][1]) / v);
+  }
+  return q.map((x) => x / q[n - 1]);
 }
 
 export class Prologue {
@@ -167,17 +219,11 @@ export class Prologue {
       }
     });
 
-    // The eraser path, in H units: three passes joined by U-turns, then on to the middle of the screen.
-    // Each straight pass runs past both edges of the page and the turning happens outside it, so no corner is cut.
-    const Lh = (L - cx) / H;
-    const Rh = (Rt - cx) / H;
-    const p3 = (top + bottom) / 2 / H; // the third pass is centred on the text
-    const rr = Math.min(0.3, (p3 - 0.28) / 2);
-    const xa = Lh - 0.18; // left U-turn: its straight part ends at xa + 0.28
-    const xb = Rh + rr - 0.1; // right U-turn: its straight part ends at xb - rr
-    const mid = [0, (0.33 * VH - cy) / H]; // where they turn into a circle: a third of the way down the screen
-    const way = [REST, [REST[0] - 0.25, -0.28], [xa, -0.28], [xa, 0.28], [xb, 0.28], [xb, p3], [Lh - 0.5, p3], mid];
-    this.way = trace(way, [0, 0.3, 0.28, 0.28, rr, rr, 0.25, 0], 0.04);
+    // The eraser path, in H units: twice round an infinity loop over the page, then on to where they turn into a
+    // circle, a third of the way down the screen.
+    const mid = [0, (0.33 * VH - cy) / H];
+    this.way = sweepPath({ L: (L - cx) / H, R: (Rt - cx) / H, top: -0.5, bottom: bottom / H }, mid);
+    this.q = pace(this.way);
     this.cum = [0]; // distance travelled at each sample, in H
     for (let i = 1; i < this.way.length; i++) {
       this.cum.push(this.cum[i - 1] + Math.hypot(this.way[i][0] - this.way[i - 1][0], this.way[i][1] - this.way[i - 1][1]));
@@ -189,10 +235,9 @@ export class Prologue {
       el.setAttribute('width', VW);
       el.setAttribute('height', VH);
     });
-    this.bandW = Math.max(EYE.h * H, bottom - top + 12); // the eraser band: the eyes, or the text block if that is taller
     this.trailLen = this.len * H;
     this.trail.setAttribute('d', 'M' + this.way.map(([u, v]) => `${(cx + u * H).toFixed(1)} ${(cy + v * H).toFixed(1)}`).join('L'));
-    this.trail.setAttribute('stroke-width', this.bandW);
+    this.trail.setAttribute('stroke-width', 2 * RHO * H); // with round caps the hole around the eyes is a circle
     this.trail.setAttribute('stroke-dasharray', `${this.trailLen} ${this.trailLen * 2}`); // a long gap, so rounding can never leave a stray dash at the far end
 
     const fs = clamp(0.115 * H, 14, 40);
@@ -247,21 +292,21 @@ export class Prologue {
     const N = 1500;
     const r = rng(11);
     const way = this.way.map(([u, v]) => [cx + u * H, cy + v * H]); // the eraser path in px
-    const hb = this.bandW / 2;
+    const rad = RHO * H;
     const D = { t: new Float32Array(N), x: new Float32Array(N), y: new Float32Array(N), vx: new Float32Array(N), vy: new Float32Array(N), life: new Float32Array(N), size: new Float32Array(N), col: new Uint8Array(N), n: 0 };
     for (let k = 0; k < N; k++) {
       const i = ink[Math.floor(r() * ink.length)];
       const x = x0 + ((i % cv.width) + r()) / sc;
       const y = y0 + (Math.floor(i / cv.width) + r()) / sc;
       let j = 0; // first spot of the path where the eraser covers this pixel
-      while (j < way.length && (Math.abs(x - way[j][0]) > hb || Math.abs(y - way[j][1]) > hb)) j++;
+      while (j < way.length && Math.hypot(x - way[j][0], y - way[j][1]) > rad) j++;
       if (j >= way.length) continue;
       const a = way[Math.max(0, j - 1)];
       const b = way[Math.min(way.length - 1, j + 1)];
       const d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       const along = 0.35 + 0.9 * r(); // dragged along with the eraser, in H per second
       const m = i * 4;
-      D.t[D.n] = SWEEP_AT + SWEEP_DUR * progInv(this.cum[j] / this.len) + 0.04 * r();
+      D.t[D.n] = SWEEP_AT + SWEEP_DUR * progInv(this.q[j]) + 0.04 * r();
       D.x[D.n] = x;
       D.y[D.n] = y;
       D.vx[D.n] = (((b[0] - a[0]) / d) * along + (r() - 0.5) * 0.35) * H;
@@ -331,9 +376,18 @@ export class Prologue {
     });
   }
 
-  /** Distance along the eraser path at second tp, in H. */
+  /** Distance along the eraser path at second tp, in H, at the natural pace of pace(). */
   travelled(tp) {
-    return this.len * prog((tp - SWEEP_AT) / SWEEP_DUR);
+    const p = prog((tp - SWEEP_AT) / SWEEP_DUR);
+    const { q, cum } = this;
+    let lo = 0;
+    let hi = q.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (q[mid] <= p) lo = mid;
+      else hi = mid;
+    }
+    return lerp(cum[lo], cum[hi], clamp((p - q[lo]) / (q[hi] - q[lo] || 1)));
   }
 
   /** Middle of the eyes at second tp, in H units from the middle of the digits. */
@@ -364,6 +418,7 @@ export class Prologue {
 
     // the eyes
     const [x, y] = this.pose(tp);
+    const lean = 7 * clamp((this.pose(tp + 0.03)[0] - x) / 0.03 / 3, -1, 1); // degrees: they lean into the way they move
     let sx = 1;
     let sy = kf(SY, tp);
     BLINKS.forEach((b) => {
@@ -385,7 +440,7 @@ export class Prologue {
         ty = lerp(ty, -0.12 * VH, IN(u));
       }
     }
-    this.eyes.setAttribute('transform', `translate(${cx + x * H} ${ty}) scale(${sx} ${sy})`);
+    this.eyes.setAttribute('transform', `translate(${cx + x * H} ${ty}) rotate(${lean}) scale(${sx} ${sy})`);
     this.eyes.setAttribute('visibility', tp < LAUNCH_AT + 0.3 ? 'visible' : 'hidden');
 
     // the speech bubble

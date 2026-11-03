@@ -1,4 +1,5 @@
 import portrait from './assets/portrait.jpg';
+import portraitEnd from './assets/portrait-end.jpg';
 
 /*
  * Edit this file to make the site yours.
@@ -17,6 +18,8 @@ export const CONFIG = {
   email: 'mazinkazi01@gmail.com',
   // Your portrait (transparent or dark background works best). Replace src/assets/portrait.jpg.
   photo: portrait,
+  // The second particle portrait, at the end of the page in Contact. Same advice. Replace src/assets/portrait-end.jpg.
+  photoEnd: portraitEnd,
   role: ['React Native', 'Developer'],
   // **double stars** make a word bold.
   about:

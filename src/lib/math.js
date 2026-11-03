@@ -67,3 +67,6 @@ export const safe = (fn) => {
 
 export const prefersReducedMotion = () =>
   typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Reduce motion is on, and the page was not opened as /?intro (which plays every animation, see index.html). */
+export const calmMotion = () => prefersReducedMotion() && !safe(() => new URLSearchParams(location.search).has('intro'));

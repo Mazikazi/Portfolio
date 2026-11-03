@@ -90,7 +90,7 @@ export default function Hero({ config, getNav }) {
           <defs>
             <mask id="proMask" maskUnits="userSpaceOnUse" x="0" y="0">
               <rect id="proMaskBg" fill="#fff" />
-              <path id="proTrail" fill="none" stroke="#000" strokeLinecap="square" strokeLinejoin="round" />
+              <path id="proTrail" fill="none" stroke="#000" strokeLinecap="round" strokeLinejoin="round" />
             </mask>
           </defs>
           <g id="proText" mask="url(#proMask)" textAnchor="middle">
