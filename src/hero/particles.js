@@ -154,7 +154,12 @@ export class ParticleField {
     }
   }
 
-  draw(ctx, t, { VW, VH, dpr, dissolve, mx, my, formStart }) {
+  /**
+   * One frame. `dissolve` (0..1) scatters the portrait. With `into` ({ x, y, r }, a circle on this canvas) it does not
+   * drift apart: its particles curl into that circle, top rows first, and fade out inside it (the closing portrait and
+   * the cloud's orb).
+   */
+  draw(ctx, t, { VW, VH, dpr, dissolve, mx, my, formStart, into }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, VW, VH);
     const sa = ss(clamp((t - 3.9) / 0.55));
@@ -172,10 +177,8 @@ export class ParticleField {
         for (let z = 0; z < 3; z++) {
           const arr = sb[b][z];
           if (!arr.length) continue;
-          ctx.beginPath();
           const sz = STAR_SIZES[z];
-          for (let i = 0; i < arr.length; i++) ctx.rect(this.stx[arr[i]], this.sty[arr[i]], sz, sz);
-          ctx.fill();
+          for (let i = 0; i < arr.length; i++) ctx.fillRect(this.stx[arr[i]], this.sty[arr[i]], sz, sz);
         }
       }
     }
@@ -218,25 +221,34 @@ export class ParticleField {
           x += ox[i];
           y += oy[i];
         }
-        if (dd > 0) {
+        let fade = 1 - 0.5 * dd;
+        let shrink = 1 - 0.4 * dd;
+        if (dd > 0 && into) {
+          const s = eIO3(clamp(dd * 1.6 - dl[i] * 0.9));
+          const q = 0.5 * into.r * ((du[i] - 0.45) / 0.3); // its spot inside the circle
+          x = lerp(x, into.x + Math.cos(ph[i]) * q, s) + Math.sin(Math.PI * s) * cu[i] * 2;
+          y = lerp(y, into.y + Math.sin(ph[i]) * q, s);
+          fade = 1 - s;
+          shrink = 1 - 0.7 * s;
+        } else if (dd > 0) {
           x += dxv[i] * dd;
           y += dyv[i] * dd;
         }
-        const al = clamp(raw / 0.12) * (1 - 0.5 * dd) * (0.72 + 0.28 * Math.sin(t * 2.6 + ph[i])) * 0.92;
+        const al = clamp(raw / 0.12) * fade * (0.72 + 0.28 * Math.sin(t * 2.6 + ph[i])) * 0.92;
+        if (al < 0.1) continue; // gone into the circle
         const aq = Math.min(3, Math.floor(al * 4));
-        buckets[lb[i] * 4 + aq].push(x, y, lerp(1.7, cell * 0.8, e * e) * (1 - 0.4 * dd));
+        buckets[lb[i] * 4 + aq].push(x, y, lerp(1.7, cell * 0.8, e * e) * shrink);
       }
       for (let b = 0; b < buckets.length; b++) {
         const arr = buckets[b];
         if (!arr.length) continue;
         ctx.globalAlpha = ((b & 3) + 1) / 4;
         ctx.fillStyle = COLS[b >> 2];
-        ctx.beginPath();
+        // fillRect, not one path of rects: the browser batches separate rects on the GPU, a path of thousands is far slower
         for (let i = 0; i < arr.length; i += 3) {
           const q = arr[i + 2];
-          ctx.rect(arr[i] - q / 2, arr[i + 1] - q / 2, q, q);
+          ctx.fillRect(arr[i] - q / 2, arr[i + 1] - q / 2, q, q);
         }
-        ctx.fill();
       }
     }
     ctx.globalAlpha = 1;

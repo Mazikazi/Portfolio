@@ -13,13 +13,14 @@ export function useScrollSpy(ids, progressRef) {
     const onScroll = () => {
       const y = window.scrollY || 0;
       const H = document.documentElement.scrollHeight - window.innerHeight;
-      if (progressRef.current) progressRef.current.style.width = (H > 0 ? (y / H) * 100 : 0) + '%';
-      setScrolled(y > 40);
       const probe = y + window.innerHeight * 0.4;
       let cur = 0;
       els.forEach((s, i) => {
         if (s && s.offsetTop <= probe) cur = i;
       });
+      // a transform, not the width: a width change makes the browser lay out the page again on every scroll
+      if (progressRef.current) progressRef.current.style.transform = `scaleX(${H > 0 ? y / H : 0})`;
+      setScrolled(y > 40);
       setActive(cur);
     };
     onScroll();

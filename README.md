@@ -23,7 +23,7 @@ Everything you read on the page lives in `src/config.js`:
 - `email` and `links`: shown in Contact
 - `about`: wrap a word in `**double stars**` to make it bold
 - `projects`: each one with a description, stack and a GitHub `href` (leave `href` out for a plain row)
-- `services` and `skills`: the cards
+- `services`: the cards. `skills`: one cascade of logo tiles across the whole screen, a lane per group, each lane sliding along its diagonal (every other lane the other way). Hovering a lane pauses it. With the particle cloud on, the lanes first stand still and the particles draw them a tile at a time, from the top lane down; each lane starts sliding once it is drawn (`src/fx/cascade.js`, its pace is `STEP`). The group titles are only read out by screen readers. The logos are in `src/assets/logos.js`, keyed by the skill's name. A skill without a logo there gets a plain text tile.
 
 ## Change the photo
 
@@ -57,6 +57,8 @@ src/
     particles.js       star dust and the particle portraits (canvas)
   fx/
     cloud.js           the particle cloud that builds the sections (WebGL)
+    cascade.js         the cloud drawing the skills cascade, tile by tile
+  assets/logos.js      the skill logos (from Simple Icons)
   styles.css           all styling
 ```
 

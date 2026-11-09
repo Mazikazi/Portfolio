@@ -12,6 +12,9 @@ import { clamp, rng, safe, calmMotion } from '../lib/math.js';
  *   - At the end of the page the cloud flows into the box of the closing portrait (#mosaic in Contact) and fades
  *     there, as that portrait gathers (see the hero engine).
  *
+ *   - sketch() sends a group of extra particles out to draw any shape and back: the skills cascade is drawn that way,
+ *     a tile at a time (fx/cascade.js).
+ *
  * The hero engine owns the clock: it calls render() every frame. Each element is built once per visit.
  * Without WebGL, with reduce motion on, or for crawlers, CLOUD is false and the elements simply fade in on scroll.
  */
@@ -26,6 +29,13 @@ const FLY = 1.0; // seconds for a particle to fly out to its spot (they leave ov
 const SHOW = 1.45; // the element fades in this long after its build starts, once the particles have drawn it
 const BACK = 2.1; // the particles start back to the cloud
 const SAFETY = 2.5; // seconds after an element is on screen when it is shown anyway, built or not
+
+// Extra particles for sketch(): groups that stay invisible in the cloud until one is sent out to draw a shape and back
+const GROUPS = 6;
+const PER = 300; // particles in a group
+const RUSH = 1.6; // they make the trip this much faster than the particles that build the elements
+export const SKETCH_SHOW = (SHOW + 0.4) / RUSH; // seconds after sketch() when the shape is drawn (it shows alone for a moment first)
+export let active = null; // the running cloud, if there is one
 
 /* ---------- the elements, registered by useReveal() ---------- */
 
@@ -80,8 +90,9 @@ attribute float a_e4;
 
 uniform vec2 u_view;
 uniform float u_dpr, u_time, u_scroll, u_born, u_form, u_end;
+uniform float u_solo; // 1 while drawing the sketch() groups: they only show while they are out of the cloud
 uniform vec2 u_box;
-uniform float u_age[${MAXEL}];
+uniform float u_age[${MAXEL + GROUPS}];
 
 varying float v_a;
 varying vec3 v_c;
@@ -157,6 +168,7 @@ void main() {
     away = k;
   }
   alpha *= mix(1.0 - smoothstep(0.75, 1.0, u_end), 1.0, away); // at the end the cloud fades, but not what is still building
+  alpha *= mix(1.0, smoothstep(0.0, 0.2, away), u_solo);
 
   float F = 1.25 * max(u_view.x, u_view.y);
   float sc = F / (F + P.z);                                // perspective about the middle of the screen
@@ -191,7 +203,7 @@ const STRIDE = ATTRS.reduce((n, a) => n + a[1], 0);
 function inkOf(el) {
   const r = el.getBoundingClientRect();
   if (!r.width || !r.height) return [];
-  const k = Math.min(1, Math.sqrt(120000 / (r.width * r.height))); // big elements are sampled at a lower resolution
+  const k = Math.min(1, Math.sqrt(60000 / (r.width * r.height))); // big elements are sampled at a lower resolution
   const cv = document.createElement('canvas');
   cv.width = Math.ceil((r.width + 4) * k);
   cv.height = Math.ceil((r.height + 4) * k);
@@ -201,8 +213,12 @@ function inkOf(el) {
   g.fillStyle = g.strokeStyle = '#fff';
   g.lineWidth = 2 / k;
 
+  // pictures inside an element (the skill cascades) are left out: they move, and their shapes are not boxes
+  const pic = (e) => e.closest('[role="img"],[aria-hidden="true"]');
+
   // borders: cards and buttons get their rounded outline, project rows the line above them
   for (const e of [el, ...el.querySelectorAll('*')]) {
+    if (pic(e)) continue;
     const cs = getComputedStyle(e);
     const top = parseFloat(cs.borderTopWidth) || 0;
     const left = parseFloat(cs.borderLeftWidth) || 0;
@@ -215,21 +231,20 @@ function inkOf(el) {
     } else g.fillRect(b.left, b.top, b.width, 2 / k);
   }
 
-  // text, one letter at a time where the browser put it
+  // text, one word at a time where the browser put it (a letter at a time is several times slower to measure)
   const range = document.createRange();
-  const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (pic(n.parentElement) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
   for (let n = tw.nextNode(); n; n = tw.nextNode()) {
     const cs = getComputedStyle(n.parentElement);
     g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    g.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
     const asc = g.measureText('M').fontBoundingBoxAscent || 0.8 * parseFloat(cs.fontSize);
     const up = cs.textTransform === 'uppercase';
-    const s = n.data;
-    for (let i = 0; i < s.length; i++) {
-      if (/\s/.test(s[i])) continue;
-      range.setStart(n, i);
-      range.setEnd(n, i + 1);
+    for (const w of n.data.matchAll(/\S+/g)) {
+      range.setStart(n, w.index);
+      range.setEnd(n, w.index + w[0].length);
       const c = range.getBoundingClientRect();
-      if (c.width) g.fillText(up ? s[i].toUpperCase() : s[i], c.left, c.top + asc);
+      if (c.width) g.fillText(up ? w[0].toUpperCase() : w[0], c.left, c.top + asc);
     }
   }
 
@@ -263,23 +278,34 @@ export class Cloud {
     if (!gl.getProgramParameter(pg, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pg));
     gl.useProgram(pg);
     this.u = {};
-    ['u_view', 'u_dpr', 'u_time', 'u_scroll', 'u_born', 'u_form', 'u_end', 'u_box', 'u_age'].forEach((n) => (this.u[n] = gl.getUniformLocation(pg, n)));
+    ['u_view', 'u_dpr', 'u_time', 'u_scroll', 'u_born', 'u_form', 'u_end', 'u_box', 'u_age', 'u_solo'].forEach((n) => (this.u[n] = gl.getUniformLocation(pg, n)));
+    this.attrs = ATTRS.map(([name, size]) => [gl.getAttribLocation(pg, name), size]);
+    this.attrs.forEach(([loc]) => gl.enableVertexAttribArray(loc));
     this.buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
-    let off = 0;
-    for (const [name, size] of ATTRS) {
-      const loc = gl.getAttribLocation(pg, name);
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, STRIDE * 4, off * 4);
-      off += size;
+
+    // the sketch() groups: like the cloud's own particles, with one target (slot 0) each, and their group's age slot
+    const r = rng(9);
+    const fly = (this.fly = new Float32Array(GROUPS * PER * STRIDE));
+    for (let i = 0; i < GROUPS * PER; i++) {
+      const o = i * STRIDE;
+      fly[o + 2] = r() * 2 - 1;
+      fly[o + 3] = r() * 2 - 1;
+      for (let c = 0; c < 4; c++) fly[o + 4 + c] = r();
+      for (let s = 0; s < SECTIONS; s++) fly[o + E0 + s] = s ? -1 : MAXEL + Math.floor(i / PER);
     }
+    this.flyBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.flyBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, fly, gl.DYNAMIC_DRAW);
+    this.starts = new Float32Array(GROUPS).fill(-99); // when each group was sent out
+    this.next = 0;
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive: brighter where the folds overlap
 
     this.N = 0;
     this.hx = null; // the hero particles the buffer was made from
     this.dirty = true; // the targets need measuring again
-    this.ages = new Float32Array(MAXEL);
+    this.ages = new Float32Array(MAXEL + GROUPS);
+    this.t = 0;
     this.clear = true; // the canvas is empty
     this.box = document.getElementById('mosaic');
     this.boxY = 0;
@@ -290,23 +316,58 @@ export class Cloud {
     window.addEventListener('resize', this.onResize);
     this.ro = new ResizeObserver(() => {
       clearTimeout(this.lt);
-      this.lt = setTimeout(() => (this.dirty = true), 200); // the layout moved: measure the elements again
+      // the layout moved: measure the elements again
+      this.lt = setTimeout(() => {
+        this.dirty = true;
+        items.forEach((it) => (it.pts = null));
+      }, 200);
     });
     this.ro.observe(document.body);
+    active = this;
   }
 
   destroy() {
     window.removeEventListener('resize', this.onResize);
     this.ro.disconnect();
     clearTimeout(this.lt);
+    if (active === this) active = null;
     release();
+  }
+
+  /** Points the attributes at a buffer of particles (the cloud's own, or the sketch() groups). */
+  bindAttrs(buf) {
+    const { gl } = this;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    let off = 0;
+    for (const [loc, size] of this.attrs) {
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, STRIDE * 4, off * 4);
+      off += size;
+    }
+  }
+
+  /** Sends the next group of extra particles out of the cloud to draw a shape (points in page px), and back. */
+  sketch(pts) {
+    const m = pts.length / 2;
+    if (!m) return;
+    const g = this.next++ % GROUPS;
+    const { fly, gl } = this;
+    for (let i = g * PER; i < (g + 1) * PER; i++) {
+      const p = Math.floor(Math.random() * m) * 2;
+      fly[i * STRIDE + T0] = pts[p];
+      fly[i * STRIDE + T0 + 1] = pts[p + 1];
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.flyBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, g * PER * STRIDE * 4, fly.subarray(g * PER * STRIDE, (g + 1) * PER * STRIDE));
+    this.starts[g] = this.t;
   }
 
   size() {
     const { cv } = this;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (cv.clientWidth === this.W && cv.clientHeight === this.H && dpr === this.dpr) return; // a phone's address bar: #fx (100lvh) keeps its size
     this.W = cv.clientWidth;
     this.H = cv.clientHeight;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = dpr;
     cv.width = Math.round(this.W * this.dpr);
     cv.height = Math.round(this.H * this.dpr);
     this.gl.viewport(0, 0, cv.width, cv.height);
@@ -322,7 +383,7 @@ export class Cloud {
     const groups = []; // the elements of each section, in page order
     live.forEach((it, k) => {
       it.k = k;
-      it.pts = inkOf(it.el);
+      it.pts = it.pts || inkOf(it.el);
       const b = it.el.getBoundingClientRect();
       it.top = b.top + window.scrollY;
       it.bottom = b.bottom + window.scrollY;
@@ -388,7 +449,12 @@ export class Cloud {
     const y = window.scrollY || 0;
     // at the top of the page there is nothing to draw: measure the elements once the intro has settled, or on the first scroll
     const idle = y < 1 && this.clear;
-    if (idle && !(this.dirty && t > 6.5)) return;
+    if (idle) {
+      if (!this.dirty || t < 6.5) return;
+      // measure one element a frame while nothing else is going on, so measuring never stalls the page
+      const it = items.filter((i) => !i.shown).slice(0, MAXEL).find((i) => !i.pts);
+      if (it) return void (it.pts = inkOf(it.el));
+    }
     if (this.dirty || this.hx !== field.hx) this.build(field);
     if (idle) return;
     const { gl, W, H, ages } = this;
@@ -408,10 +474,23 @@ export class Cloud {
       if (age < BACK + 1.6) busy = true;
       ages[it.k] = Math.min(age, 9);
     }
+    let flying = false;
+    for (let g = 0; g < GROUPS; g++) {
+      const age = (t - this.starts[g]) * RUSH;
+      if (age < 0 || age > BACK + 1.6) continue;
+      ages[MAXEL + g] = age;
+      flying = busy = true;
+    }
 
     const born = clamp((y / (0.25 * VH) - 0.35) / 0.5);
     const form = clamp((y - 0.2 * VH) / (0.9 * VH));
     const end = this.box ? clamp(1 - (this.boxB - y - H) / (0.7 * H)) : 0;
+    // where the orb is on screen (as the shader places it), for the closing portrait to flow into
+    const e = end * end * (3 - 2 * end);
+    const R = 0.34 * Math.min(W, H) * (1 - 0.7 * e);
+    const F = 1.25 * Math.max(W, H);
+    const sc = F / (F + 1.5 * R);
+    this.orb = { x: W / 2 + (this.boxX - W / 2) * e * sc, y: H / 2 + (this.boxY - y - H / 2) * e * sc, r: R * sc };
     if ((born <= 0 || end >= 1) && !busy) {
       if (this.clear) return; // nothing to show, and the canvas is already empty
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -432,6 +511,13 @@ export class Cloud {
     gl.uniform1fv(u.u_age, ages);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    this.bindAttrs(this.buf);
+    gl.uniform1f(u.u_solo, 0);
     gl.drawArrays(gl.POINTS, 0, this.N);
+    if (flying) {
+      this.bindAttrs(this.flyBuf);
+      gl.uniform1f(u.u_solo, 1);
+      gl.drawArrays(gl.POINTS, 0, GROUPS * PER);
+    }
   }
 }

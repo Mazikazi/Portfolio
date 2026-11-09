@@ -21,9 +21,9 @@ export const CONFIG = {
   // The second particle portrait, at the end of the page in Contact. Same advice. Replace src/assets/portrait-end.jpg.
   photoEnd: portraitEnd,
   role: ['React Native', 'Developer'],
-  // **double stars** make a word bold.
+  // **double stars** make a word bold. The first word shimmers.
   about:
-    "Hey, I'm **Mazin**. A React Native developer building mobile apps with Expo: offline-first retail and point of sale tools, and inventory software that a car dealership uses every day. I also interned at Udupi Web Solutions, working on the React frontend and FastAPI backend of a recruiting tool.",
+    "Hey, I'm **Mazin**. I build apps that do more than just look good. From mobile experiences to real-world inventory solutions, I turn ideas into functional products using Kotlin, React Native, and modern technologies.",
   // `href` makes the whole row a link. Rows without one stay plain text.
   projects: [
     {

@@ -29,7 +29,7 @@ export default function About({ text }) {
               <p id="aboutText">
                 {words.map((w, i) => (
                   <span key={i}>
-                    <span className={`w${w.bold ? ' b' : ''}${i < lit ? ' on' : ''}`}>{w.text}</span>
+                    <span className={`w${w.bold ? ' b' : ''}${i ? '' : ' shine'}${i < lit ? ' on' : ''}`}>{w.text}</span>
                     {i < words.length - 1 ? ' ' : ''}
                   </span>
                 ))}

@@ -229,6 +229,11 @@ export class HeroEngine {
     this.endCv = cv;
     this.endCtx = cv.getContext('2d');
     this.endCalm = calmMotion();
+    // (re)build it ahead, in a quiet moment, rather than in the frame where Contact scrolls in
+    const queue = () => {
+      this.endBuilt = false;
+      (window.requestIdleCallback || setTimeout)(() => !this.destroyed && this.endSrc && !this.endBuilt && this.buildEnd());
+    };
     const im = new Image();
     im.onload = () => {
       const src = document.createElement('canvas');
@@ -236,10 +241,10 @@ export class HeroEngine {
       src.height = 1000;
       fitPhoto(src.getContext('2d'), im);
       this.endSrc = src;
-      this.endBuilt = false;
+      queue();
     };
     im.src = this.cfg.photoEnd;
-    const ro = new ResizeObserver(() => (this.endBuilt = false));
+    const ro = new ResizeObserver(queue);
     ro.observe(cv);
     this.cleanups.push(() => ro.disconnect());
     this.on(cv.parentNode, 'pointermove', (e) => {
@@ -256,8 +261,11 @@ export class HeroEngine {
     const cv = this.endCv;
     const c = cv.getBoundingClientRect();
     const b = this.box.getBoundingClientRect();
+    if (!b.width || !b.height) return; // no layout yet (a hidden or zero-size window): try again later
     this.endW = c.width;
     this.endH = c.height;
+    this.endX = c.left + window.scrollX; // the canvas on the page, to place the orb on it
+    this.endY = c.top + window.scrollY;
     cv.width = Math.round(c.width * this.dpr);
     cv.height = Math.round(c.height * this.dpr);
     this.end.buildPortrait(this.endSrc, c.width, c.height, { x: b.left - c.left, y: b.top - c.top, w: b.width, h: b.height });
@@ -523,7 +531,11 @@ export class HeroEngine {
     if (this.endOn && this.endSrc) {
       if (!this.endBuilt) this.buildEnd();
       if (this.endSeen && this.endStart == null) this.endStart = this.endCalm ? -10 : t;
+      // scrolled up from it, the portrait flows into the cloud's orb (where it was last frame) rather than drifting apart
+      const o = this.cloud && this.cloud.orb;
+      const into = o && { x: o.x + window.scrollX - this.endX, y: o.y + window.scrollY - this.endY, r: o.r };
       this.end.draw(this.endCtx, t, {
+        into,
         VW: this.endW,
         VH: this.endH,
         dpr: this.dpr,
@@ -554,6 +566,11 @@ export class HeroEngine {
       this.endOn = c.bottom > 0 && c.top < vh;
       this.endDis = this.endCalm ? 0 : clamp(below / (0.25 * vh));
       if (below < 0.1 * vh) this.endSeen = true;
+      // once Contact has left the screen, the portrait gathers again the next time it is reached, like the hero's after the intro
+      if (!this.endOn && this.endSeen) {
+        this.endSeen = false;
+        this.endStart = null;
+      }
     }
   };
 
@@ -561,6 +578,12 @@ export class HeroEngine {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
       if (!this.ready || this.destroyed) return;
+      // a phone's address bar showing or hiding fires resize too, but leaves the hero (100svh) as it was: nothing to rebuild
+      const { hero } = this.els;
+      if (hero.clientWidth === this.VW && hero.clientHeight === this.VH && Math.min(window.devicePixelRatio || 1, 2) === this.dpr) {
+        this.onScroll();
+        return;
+      }
       this.layout();
       this.field.buildStars(this.VW, this.VH);
       if (this.usingPlaceholder) this.field.buildPortrait(this.src, this.VW, this.VH);
