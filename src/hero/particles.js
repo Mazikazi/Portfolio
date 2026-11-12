@@ -189,6 +189,7 @@ export class ParticleField {
       const dd = dissolve;
       const rr = 80;
       const moving = mx > -900;
+      const rip = this.ripples || [];
       for (let i = 0; i < this.N; i++) {
         const raw = t - formStart - dl[i];
         if (raw <= 0) continue;
@@ -205,6 +206,21 @@ export class ParticleField {
             const dist = Math.sqrt(ddx * ddx + ddy * ddy);
             if (dist < rr && dist > 0.1) {
               const f = (1 - dist / rr) * 5;
+              vx[i] += (ddx / dist) * f;
+              vy[i] += (ddy / dist) * f;
+            }
+          }
+          // a tap sends a ring outward; particles under the ring get shoved along it and spring back
+          for (let k = 0; k < rip.length; k++) {
+            const rp = rip[k];
+            const age = t - rp.t;
+            if (age < 0 || age > 1.4) continue;
+            const ddx = x + ex - rp.x;
+            const ddy = y + ey - rp.y;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+            const off = Math.abs(dist - age * 380);
+            if (off < 36) {
+              const f = (1 - off / 36) * (1 - age / 1.4) * 4.5;
               vx[i] += (ddx / dist) * f;
               vy[i] += (ddy / dist) * f;
             }

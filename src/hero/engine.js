@@ -169,6 +169,7 @@ export class HeroEngine {
     this.on(this.els.hero, 'pointerleave', () => {
       this.mx = this.my = -999;
     });
+    this.ripple(this.els.hero, this.field);
     this.on(window, 'scroll', this.onScroll, { passive: true });
     this.on(window, 'resize', this.onResize);
     window.__seek = (t) => {
@@ -254,6 +255,17 @@ export class HeroEngine {
     });
     this.on(cv.parentNode, 'pointerleave', () => {
       this.ex = this.ey = -999;
+    });
+    this.ripple(cv.parentNode, this.end, cv);
+  }
+
+  /** Touch screens only: a tap on the portrait sends a ripple through its particles. */
+  ripple(el, field, ref = el) {
+    this.on(el, 'pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      const r = ref.getBoundingClientRect();
+      const list = (field.ripples = (field.ripples || []).filter((p) => this.tNow - p.t < 1.4));
+      list.push({ x: e.clientX - r.left, y: e.clientY - r.top, t: this.tNow });
     });
   }
 
