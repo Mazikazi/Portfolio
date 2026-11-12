@@ -90,9 +90,8 @@ html.pro,html.pro body{background:#fff}
 html.pro #pro{display:block}
 html.pro #skip:hover{color:#14161a}
 html.pro :focus-visible{outline-color:#14161a}
-#proSvg,#proDust{position:absolute;inset:0;width:100%;height:100%}
-#proDust{pointer-events:none}
-#proText{visibility:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif} /* the plain system font of any stock 404 page */
+#proPage,#proOrb{position:absolute;inset:0;width:100%;height:100%} /* the fake page, which the orb wipes away, and the orb */
+#proOrb{pointer-events:none;mix-blend-mode:difference} /* its light dots show dark on the white page, and light where the site shows through */
 #proBub{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;transform-origin:100% 78%;color:#14161a;background:#fff;border:.12em solid #14161a;border-radius:.9em;padding:.4em .75em .45em;font:700 24px/1.1 var(--text)}
 #proBub i,#proBub b{font-style:normal}
 #proBub b{visibility:hidden}

@@ -86,33 +86,8 @@ export default function Hero({ config, getNav }) {
         </a>
       </div>
       <div id="pro" aria-hidden="true" ref={set('pro')}>
-        <svg id="proSvg">
-          <defs>
-            <mask id="proMask" maskUnits="userSpaceOnUse" x="0" y="0">
-              <rect id="proMaskBg" fill="#fff" />
-              <path id="proTrail" fill="none" stroke="#000" strokeLinecap="round" strokeLinejoin="round" />
-            </mask>
-          </defs>
-          <g id="proText" mask="url(#proMask)" textAnchor="middle">
-            <text id="proN" fill="#212529" fontWeight="700">
-              404
-            </text>
-            <text id="proH" fill="#212529" fontWeight="600">
-              Page not found
-            </text>
-            <text id="proP" fill="#6c757d">
-              {"The page you're looking for doesn't exist."}
-            </text>
-            <text id="proL" fill="#0d6efd" textDecoration="underline">
-              Go back home
-            </text>
-          </g>
-          <g id="proEyes" fill="#14161a">
-            <rect id="eyeL" />
-            <rect id="eyeR" />
-          </g>
-        </svg>
-        <canvas id="proDust" />
+        <canvas id="proPage" />
+        <canvas id="proOrb" />
         <div id="proBub">
           <i />
           <b />
